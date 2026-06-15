@@ -38,6 +38,8 @@ ring-resonator-tutorial/
 ├── LICENSE
 ├── requirements.txt
 ├── ring_tutorial.py             # physics functions + figure generation
+├── spectrum_fit.py              # measured-spectrum characterization tool
+├── measured_spectrum.csv        # synthetic "measurement" (replace with real data)
 ├── ring_resonators_tutorial.md  # the teaching guide (5 levels)
 └── images/                      # generated figures used in the guide
 ```
@@ -45,6 +47,27 @@ ring-resonator-tutorial/
 ## The physics, in one paragraph
 
 A microring resonator is a closed waveguide loop coupled to a straight bus waveguide. Light mostly stays in the bus, but a fraction couples into the ring across a narrow gap. When a wavelength fits a whole number of times into the ring's optical length, it builds up over many round trips — a resonance — leaving a dip in the transmission spectrum. The spacing of those dips (FSR) is set by the ring radius; their depth (ER) and sharpness (Q) are set by the balance between coupling and round-trip loss. Picking a radius and a gap to hit target FSR and Q is the design problem this guide walks through.
+
+## Bonus: spectrum characterization (`spectrum_fit.py`)
+
+The forward direction (geometry → spectrum) is only half the story. `spectrum_fit.py` does the **inverse, experimental** direction: given a measured transmission spectrum, it recovers the real device parameters and compares them with the calculated ones.
+
+To have something to process, the script first synthesizes a realistic measurement — the ideal lineshape plus a Fabry–Pérot baseline ripple and detector noise — saves it to `measured_spectrum.csv`, then characterizes it as if the true values were unknown:
+
+1. **Detrend** the baseline (upper-envelope percentile filter).
+2. **Detect** resonances (`scipy.signal.find_peaks`).
+3. **Fit** each resonance to the all-pass lineshape (`scipy.optimize.curve_fit`) → `t`, `A`, λ_res.
+4. **Derive** FSR (resonance spacing), Q (finesse), ER, group index `n_g` (from FSR and known radius), loss `α`, coupling `κ`.
+5. **Compare** recovered vs calculated in a table and plots.
+
+![Spectrum overview](images/fig_spectrum_overview.png)
+![Resonance fit](images/fig_resonance_fit.png)
+
+Typical recovery on the synthetic data: FSR and `n_g` within ~0.5%, `t`/`A` within ~0.2%, and the noise-sensitive Q/ER within ~10%.
+
+**One honest caveat — the `t ↔ A` degeneracy.** The transmission *magnitude* lineshape is symmetric under swapping the self-coupling `t` and the round-trip amplitude `A`. So a fit to `|T|` alone recovers the unordered pair `{t, A}` but **cannot** tell undercoupled from overcoupled. Resolving it needs extra information (the phase response, or a sweep over coupling). The tool reports this rather than silently guessing, and assigns the regime from design intent for the comparison.
+
+To run it on your own data, replace `measured_spectrum.csv` with two columns (`wavelength_nm, transmission`) and call `characterize(lam, T)`.
 
 ## Platform constants (used in examples)
 

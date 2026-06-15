@@ -349,6 +349,74 @@ def fig5_designmap(path="images/fig5_designmap.png"):
     fig.tight_layout(); fig.savefig(path, bbox_inches="tight"); plt.close(fig)
 
 
+def fig6_loss_study(path="images/fig6_loss_study.png"):
+    """Бонус: что делает рост потерь при ФИКСИРОВАННОЙ геометрии (тот же gap)."""
+    R, gap = 10.0, 0.33
+    L = round_trip_length(R)
+    t = self_coupling(gap)
+    kap2 = kappa(gap) ** 2
+    lam_res = nearest_resonance(R, gap)
+
+    def db_to_per_um(db_cm):
+        return db_cm * np.log(10) / 10.0 / 1e4        # дБ/см -> 1/мкм
+
+    def T_loss(lam, alpha):
+        A = np.exp(-alpha * L / 2)
+        phi = 2 * np.pi * n_eff_of_lambda(lam) * L / lam
+        return (t**2 - 2*t*A*np.cos(phi) + A**2) / (1 - 2*t*A*np.cos(phi) + (t*A)**2)
+
+    def Q_loaded_a(alpha):
+        Qi = 2 * np.pi * N_G / (LAMBDA0 * alpha)
+        Qc = np.pi * N_G * L / (LAMBDA0 * kap2)
+        return 1.0 / (1.0 / Qi + 1.0 / Qc)
+
+    def ER_a(alpha):
+        A = np.exp(-alpha * L / 2)
+        Tmin = ((t - A) / (1 - t * A)) ** 2
+        Tmax = ((t + A) / (1 + t * A)) ** 2
+        return -10 * np.log10(np.maximum(Tmin / Tmax, 1e-7))
+
+    # критические потери: A = t
+    alpha_crit = -2 * np.log(t) / L
+    db_crit = alpha_crit / (np.log(10) / 10.0 / 1e4)
+
+    fig, (axA, axB, axC) = plt.subplots(1, 3, figsize=(13.5, 4.3))
+
+    # (A) наложенные резонансы
+    losses = sorted([0.5, 1.0, 2.0, db_crit, 4.0, 8.0])
+    lam = np.linspace(lam_res - 7e-5, lam_res + 7e-5, 6000)
+    cmap = plt.cm.viridis(np.linspace(0.05, 0.9, len(losses)))
+    for db, c in zip(losses, cmap):
+        lbl = (f"{db:.1f} дБ/см" if abs(db - db_crit) > 0.05
+               else f"{db:.1f} дБ/см (крит.)")
+        axA.plot((lam - lam_res) * 1e6, T_loss(lam, db_to_per_um(db)),
+                 lw=1.8, color=c, label=lbl)
+    axA.set_xlabel(f"Отстройка от {lam_res*1000:.1f} нм, пм")
+    axA.set_ylabel(r"$T$"); axA.set_ylim(-0.03, 1.05)
+    axA.legend(fontsize=8, loc="lower right")
+    axA.set_title("Резонанс при росте потерь")
+
+    # (B) Q vs потери
+    db = np.linspace(0.2, 12, 300)
+    a = db_to_per_um(db)
+    axB.plot(db, Q_loaded_a(a) / 1e3, lw=2, color=COL_BUS)
+    axB.axvline(db_crit, ls="--", color=COL_RING, lw=1.3)
+    axB.set_xlabel("Потери, дБ/см"); axB.set_ylabel(r"$Q_{loaded}$, тыс.")
+    axB.set_title("Ширина: Q падает монотонно")
+
+    # (C) ER vs потери
+    axC.plot(db, np.minimum(ER_a(a), 55), lw=2, color=COL_OK)
+    axC.axvline(db_crit, ls="--", color=COL_RING, lw=1.3)
+    axC.annotate(f"критическая\nсвязь ≈ {db_crit:.1f} дБ/см",
+                 (db_crit, 50), (db_crit + 1.5, 42), fontsize=9, color=COL_RING)
+    axC.set_xlabel("Потери, дБ/см"); axC.set_ylabel("ER, дБ")
+    axC.set_title("Глубина: ER немонотонна")
+
+    fig.suptitle("Бонус. Рост потерь при фиксированной геометрии (R=10 мкм, g=330 нм)",
+                 fontsize=13)
+    fig.tight_layout(); fig.savefig(path, bbox_inches="tight"); plt.close(fig)
+
+
 if __name__ == "__main__":
     # работаем в папке самого скрипта и создаём images/, если её нет
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -358,7 +426,8 @@ if __name__ == "__main__":
     fig3_metrics()
     fig4_geometry()
     fig5_designmap()
-    print("OK: 5 рисунков сохранены в images/")
+    fig6_loss_study()
+    print("OK: 6 рисунков сохранены в images/")
     # короткая сводка чисел для проверки
     print(f"FSR(R=10)      = {FSR(10)*1000:.2f} нм")
     print(f"Q_intrinsic    = {Q_intrinsic(10):.0f}")
